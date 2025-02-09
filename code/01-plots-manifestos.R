@@ -3,7 +3,9 @@ needs(tidyverse, SnowballC, tidytext, stopwords)
 manifestos <- read_csv("data/bundestagswahl_2025_classified_df.csv")
 
 manifestos_clean <- manifestos |> 
-  mutate(party = stringi::stri_trans_nfc(manifestos_clean$party),
+  mutate(
+    text = stringi::stri_trans_nfc(manifestos_clean$text),
+    party = stringi::stri_trans_nfc(manifestos_clean$party),
     predicted = stringi::stri_trans_nfc(manifestos_clean$predicted),
     label = case_when(
     predicted == "1 - Macroeconomics" ~ "Macroecnomics",
@@ -29,7 +31,8 @@ manifestos_clean <- manifestos |>
     predicted == "23 - Culture" ~ "Culture",
     predicted == "98 - Non-thematic" ~ "Non-thematic",
     predicted == "99 - Other" ~ "Other"
-  ))
+  ),
+  text = str_replace_all(text, "www\\.bsw-vg\\.de", ""))
 
 
 manifestos_clean |> 
@@ -52,47 +55,33 @@ manifestos_clean |>
                               "spd" = "SPD", "fdp" = "FDP", "grüne" = "Grüne",
                               "linke" = "Linke", "bsw" = "BSW")) +
   labs(
-    title = "Thematische Klassifizierung der Sätze in Wahlprogrammen in %",
-    y = "Prozentanteil",
-    x = "Partei"
+    title = "Thematic classification of manifesto sentences in %",
+    y = "Share of Sentences",
+    x = "Party"
   )
 
 
-### tf-idf
-
-stop_words <- stopwords(language = "de")
-
-manifestos_2025 |> 
+# calculate tf-idf for each party and label
+manifestos_clean |> 
   unnest_tokens(word, text) |> 
-  filter(!word %in% stop_words) |>
-  # remove numbers
+  filter(!word %in% stopwords_vec) |> 
   filter(!str_detect(word, "\\d+")) |>
-  mutate(
-    word = wordStem(word, language = "german")
-    ) |> 
-  count(party, word) |> 
+  mutate(word = wordStem(word, language = "german")) |>
+  filter(label == "Environment") |>
+  count(party, word) |>
   group_by(party) |> 
-  filter(
-    n > 3
-  ) |> 
   ungroup() |> 
-  bind_tf_idf(word, party, n) |> 
+  bind_tf_idf(word, party, n) |>
   arrange(desc(tf_idf)) |> 
-  # only keep highest tf idfs
   group_by(party) |> 
-  slice_max(tf_idf, n = 10) |>
+  slice_max(tf_idf, n = 7) |>
   ggplot(aes(x = reorder(word, tf_idf), y = tf_idf, fill = party)) +
   geom_col(show.legend = FALSE) +
-  facet_wrap(~ party, scales = "free") +
+  facet_wrap(~ party, scales = "free_y") + 
   coord_flip() +
   theme_minimal() +
   labs(
-    title = "Top 10 Wörter nach tf-idf in Wahlprogrammen",
-    y = "tf-idf",
+    title = "Top 10 TF-IDF Wörter für Immigration nach Partei",
+    y = "TF-IDF",
     x = "Wort"
   )
-  
-
-
-
-
