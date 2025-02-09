@@ -1,4 +1,4 @@
-library(tidyverse)
+needs(tidyverse, SnowballC, tidytext, stopwords)
 
 manifestos <- read_csv("data/bundestagswahl_2025_classified_df.csv")
 
@@ -56,7 +56,41 @@ manifestos_clean |>
     y = "Prozentanteil",
     x = "Partei"
   )
-  
+
+
+### tf-idf
+
+stop_words <- stopwords(language = "de")
+
+manifestos_2025 |> 
+  unnest_tokens(word, text) |> 
+  filter(!word %in% stop_words) |>
+  # remove numbers
+  filter(!str_detect(word, "\\d+")) |>
+  mutate(
+    word = wordStem(word, language = "german")
+    ) |> 
+  count(party, word) |> 
+  group_by(party) |> 
+  filter(
+    n > 3
+  ) |> 
+  ungroup() |> 
+  bind_tf_idf(word, party, n) |> 
+  arrange(desc(tf_idf)) |> 
+  # only keep highest tf idfs
+  group_by(party) |> 
+  slice_max(tf_idf, n = 10) |>
+  ggplot(aes(x = reorder(word, tf_idf), y = tf_idf, fill = party)) +
+  geom_col(show.legend = FALSE) +
+  facet_wrap(~ party, scales = "free") +
+  coord_flip() +
+  theme_minimal() +
+  labs(
+    title = "Top 10 Wörter nach tf-idf in Wahlprogrammen",
+    y = "tf-idf",
+    x = "Wort"
+  )
   
 
 
